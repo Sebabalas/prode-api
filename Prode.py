@@ -2,6 +2,8 @@ from flask import Flask, jsonify
 from flask_cors import CORS  # Importar CORS para permitir solicitudes desde diferentes dominios
 import time
 from selenium import webdriver
+from selenium.webdriver.firefox.service import Service
+from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -24,6 +26,7 @@ URL = 'https://www.flashscore.com/tennis/'
 def test_download(driver):
     """Verifica si la página se ha cargado completamente"""
     try:
+        logger.info("Iniciando la verificación de carga de la página...")
         page1 = driver.page_source
         WebDriverWait(driver, 10).until(EC.staleness_of(driver.find_element(By.TAG_NAME, 'body')))
         page2 = driver.page_source
@@ -38,6 +41,7 @@ def test_download(driver):
             page1 = page2
             page2 = driver.page_source
             index += 1
+        logger.info("Página cargada correctamente.")
         return page1
     except Exception as e:
         logger.error(f"Error al verificar la carga de la página: {str(e)}")
@@ -46,67 +50,78 @@ def test_download(driver):
 # Función para obtener el contenido de la página y analizar los partidos
 def obtener_partidos_data(driver):
     """Obtiene los partidos desde la página web y los estructura en formato JSON"""
-    # Obtener el contenido HTML de la página
-    body = driver.execute_script("return document.body")
-    source = body.get_attribute('innerHTML')
-    soup = BeautifulSoup(source, "html.parser")
+    try:
+        logger.info("Iniciando la obtención de datos de partidos...")
+        # Obtener el contenido HTML de la página
+        body = driver.execute_script("return document.body")
+        source = body.get_attribute('innerHTML')
+        soup = BeautifulSoup(source, "html.parser")
 
-    # Encontrar todos los elementos de partidos
-    matches = soup.find_all('div', class_=['event__header', 'event__match'])
-    partidos = []
+        logger.info("Contenido HTML obtenido correctamente.")
+        
+        # Encontrar todos los elementos de partidos
+        matches = soup.find_all('div', class_=['event__header', 'event__match'])
+        logger.info(f"Se encontraron {len(matches)} partidos.")
+        
+        partidos = []
 
-    # Iterar sobre los partidos encontrados y generar datos en JSON
-    for match in matches:
-        first_player = match.find('div', class_='event__participant event__participant--home')
-        second_player = match.find('div', class_='event__participant event__participant--away')
+        # Iterar sobre los partidos encontrados y generar datos en JSON
+        for match in matches:
+            first_player = match.find('div', class_='event__participant event__participant--home')
+            second_player = match.find('div', class_='event__participant event__participant--away')
 
-        if not first_player:
-            first_player = match.find('div', class_='event__participant event__participant--home fontExtraBold')
-        if not second_player:
-            second_player = match.find('div', class_='event__participant event__participant--away fontExtraBold')
+            if not first_player:
+                first_player = match.find('div', class_='event__participant event__participant--home fontExtraBold')
+            if not second_player:
+                second_player = match.find('div', class_='event__participant event__participant--away fontExtraBold')
 
-        first_player = first_player.text if first_player else "Desconocido"
-        second_player = second_player.text if second_player else "Desconocido"
+            first_player = first_player.text if first_player else "Desconocido"
+            second_player = second_player.text if second_player else "Desconocido"
 
-        # Obtener la fecha del partido
-        date_match = driver.find_element(By.XPATH, '//*[@id="calendarMenu"]').text.split(' ')[0]
-        instancia = match.find('div', class_='event__stage')
+            # Obtener la fecha del partido
+            date_match = driver.find_element(By.XPATH, '//*[@id="calendarMenu"]').text.split(' ')[0]
+            instancia = match.find('div', class_='event__stage')
 
-        winner = ""
-        pbyp = []
-        round_match = "Desconocido"
-        tourney_name = "Torneo desconocido"
-        start_time = ""
-        score = "N/A"
-        instancia_text = "Desconocido"
+            winner = ""
+            pbyp = []
+            round_match = "Desconocido"
+            tourney_name = "Torneo desconocido"
+            start_time = ""
+            score = "N/A"
+            instancia_text = "Desconocido"
 
-        if instancia:
-            instancia_text = instancia.text.strip()
-            if "finished" in instancia_text.lower():
-                # Si el partido terminó, obtener el puntaje
-                first_player_score = match.find('div', class_='event__score event__score--home').text
-                second_player_score = match.find('div', class_='event__score event__score--away').text
-                score = f"{first_player_score}-{second_player_score}"
-                winner = "first_player" if match.find(class_='duelParticipant__home') else "second_player"
+            if instancia:
+                instancia_text = instancia.text.strip()
+                if "finished" in instancia_text.lower():
+                    # Si el partido terminó, obtener el puntaje
+                    first_player_score = match.find('div', class_='event__score event__score--home').text
+                    second_player_score = match.find('div', class_='event__score event__score--away').text
+                    score = f"{first_player_score}-{second_player_score}"
+                    winner = "first_player" if match.find(class_='duelParticipant__home') else "second_player"
+                else:
+                    # Partido en curso
+                    pbyp = [0, 1]
             else:
-                # Partido en curso
-                pbyp = [0, 1]
-        else:
-            # Si no hay instancia, obtener la hora de inicio
-            hora_inicio = match.find('div', class_='event__time')
-            start_time = hora_inicio.text.strip() if hora_inicio else "Desconocido"
+                # Si no hay instancia, obtener la hora de inicio
+                hora_inicio = match.find('div', class_='event__time')
+                start_time = hora_inicio.text.strip() if hora_inicio else "Desconocido"
 
-        # Estructura del JSON para cada partido
-        partidos.append({
-            "event_date": date_match,
-            "event_time": start_time,
-            "event_first_player": first_player,
-            "event_second_player": second_player,
-            "event_final_result": score,
-            "event_status": instancia_text
-        })
+            # Estructura del JSON para cada partido
+            partidos.append({
+                "event_date": date_match,
+                "event_time": start_time,
+                "event_first_player": first_player,
+                "event_second_player": second_player,
+                "event_final_result": score,
+                "event_status": instancia_text
+            })
 
-    return partidos
+        logger.info(f"Total de partidos extraídos: {len(partidos)}")
+        return partidos
+
+    except Exception as e:
+        logger.error(f"Error al obtener los partidos: {str(e)}")
+        return []
 
 # Ruta de la API para obtener los partidos
 @app.route("/partidos", methods=["GET"])
@@ -115,20 +130,23 @@ def obtener_partidos():
     try:
         logger.info('Iniciando la solicitud de partidos...')
         
-        # Opciones de Selenium
-        OPTIONS = webdriver.ChromeOptions()
+        # Configurar las opciones para Firefox
+        OPTIONS = Options()
         OPTIONS.add_argument('user-agent=Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Mobile Safari/537.36')
         OPTIONS.add_argument('--disable-blink-features=AutomationControlled')
-        OPTIONS.add_argument('--headless=new')
+        OPTIONS.add_argument("--verbose")
+        OPTIONS.add_argument('--no-sandbox')
 
         # Inicializar Selenium WebDriver
-        driver = webdriver.Chrome(options=OPTIONS)
-        driver.get(url=URL)
+        driver = webdriver.Firefox(options=OPTIONS)
+        logger.info("Firefox WebDriver iniciado correctamente.")
+        driver.get(URL)
+        logger.info(f"Navegando a {URL}...")
 
+        time.sleep(5)
         # Esperar a que la página cargue completamente
-        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, 'event__header')))
-
-        logger.info('Página cargada exitosamente.')
+        WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.CLASS_NAME, 'event__match')))
+        logger.info("La página se cargó correctamente.")
 
         # Obtener partidos y devolver en formato JSON
         partidos = obtener_partidos_data(driver)
