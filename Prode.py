@@ -10,7 +10,6 @@ from selenium.webdriver.support import expected_conditions as EC
 from bs4 import BeautifulSoup
 import logging
 
-
 # Configuración de logging
 logging.basicConfig(level=logging.INFO)  # Configurar el nivel de log
 logger = logging.getLogger(__name__)  # Crea un logger para el archivo
@@ -132,6 +131,8 @@ def obtener_partidos():
         
         # Configurar las opciones para Firefox
         OPTIONS = Options()
+        OPTIONS.binary_location = r"C:\Program Files\Mozilla Firefox\firefox.exe"
+        OPTIONS.set_preference("webdriver.log.level", "TRACE")
         OPTIONS.add_argument('user-agent=Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Mobile Safari/537.36')
         OPTIONS.add_argument('--disable-blink-features=AutomationControlled')
         OPTIONS.add_argument("--verbose")
@@ -139,8 +140,9 @@ def obtener_partidos():
         OPTIONS.add_argument("--headless")
         OPTIONS.add_argument("--disable-gpu")
 
-        #service = Service('C:/Users/SebastiánBalás/Desktop/Prode/GeckoDriver')
-        driver = webdriver.Firefox( options=OPTIONS)
+        # Ruta del GeckoDriver
+        service = Service('C:/Users/SebastiánBalás/Desktop/Prode/GeckoDriver/geckodriver.exe')
+        driver = webdriver.Firefox(service=service, options=OPTIONS)
 
         logger.info("Firefox WebDriver iniciado correctamente.")
         driver.get(URL)
