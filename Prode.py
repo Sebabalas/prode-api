@@ -136,9 +136,12 @@ def obtener_partidos():
         OPTIONS.add_argument('--disable-blink-features=AutomationControlled')
         OPTIONS.add_argument("--verbose")
         OPTIONS.add_argument('--no-sandbox')
+        OPTIONS.add_argument("--headless")
+        OPTIONS.add_argument("--disable-gpu")
 
-        # Inicializar Selenium WebDriver
-        driver = webdriver.Firefox(options=OPTIONS)
+        #service = Service('C:/Users/SebastiánBalás/Desktop/Prode/GeckoDriver')
+        driver = webdriver.Firefox( options=OPTIONS)
+
         logger.info("Firefox WebDriver iniciado correctamente.")
         driver.get(URL)
         logger.info(f"Navegando a {URL}...")
